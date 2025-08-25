@@ -1,88 +1,234 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Etsy → Luca e-Arşiv Dashboard</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <title>Etsy → Luca e-Arşiv · Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; }
-    table { width:100%; border-collapse: collapse; margin-top: 16px; }
-    th, td { border-bottom: 1px solid #eee; padding: 8px 6px; font-size: 14px; vertical-align: middle; }
-    th { text-align: left; background:#fafafa; }
-    .tag { padding: 2px 8px; border-radius: 10px; font-size: 12px; display: inline-block; }
-    .ok { background:#e6ffed; color:#0a8a3c; }
-    .err { background:#ffecec; color:#b00020; }
-    .sent { background:#e8f0ff; color:#174ea6; }
-    .btn { background:#111; color:#fff; padding:6px 10px; border-radius:8px; text-decoration:none; border:none; cursor:pointer;}
-    .btn.outline { background:#fff; color:#111; border:1px solid #ddd; }
-    .stack { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .subtle { color:#666; }
-    .top { display:flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    code { background:#f5f5f5; padding: 2px 6px; border-radius: 6px; }
-    .right { margin-left:auto; }
+    .status-chip{padding:2px 8px;border-radius:9999px;font-size:.75rem}
+    .chip-none{background:#f3f4f6;color:#374151}
+    .chip-created{background:#ecfdf5;color:#065f46}
+    .chip-sent{background:#e0e7ff;color:#1e3a8a}
+    .chip-error{background:#ffe4e6;color:#9f1239}
+    .tw-sticky { position: sticky; top: 0; background: white; z-index: 10; }
   </style>
 </head>
-<body>
-  <div class="top">
-    <h2>Etsy → Luca e-Arşiv</h2>
-    <form action="/sync-now" method="post"><button class="btn" type="submit">Sync now</button></form>
-    <a class="btn outline" href="/settings">Settings</a>
-    <span class="subtle right">Polling <b>{{ poll }}</b> min · last cursor: <code>{{ last_sync }}</code> · Auto-invoice: <b>{{ 'ON' if auto_invoice else 'OFF' }}</b> · <a class="subtle" href="/logout">Logout</a></span>
-  </div>
+<body class="bg-gray-50 text-gray-900">
+  <header class="tw-sticky border-b">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div class="text-xl font-semibold">Etsy → Luca e-Arşiv</div>
+      <form action="/sync-now" method="post" class="ml-2">
+        <button class="inline-flex items-center gap-2 rounded-lg bg-black text-white px-3 py-1.5 hover:bg-gray-800">
+          <span>Sync now</span>
+        </button>
+      </form>
+      <a href="/settings" class="ml-2 inline-flex items-center rounded-lg border px-3 py-1.5 hover:bg-gray-100">Settings</a>
+      <div class="ml-auto text-sm text-gray-600">
+        Polling <b>{{ poll }}</b> min · last cursor: <code class="bg-gray-100 px-1.5 py-0.5 rounded">{{ last_sync }}</code> · Auto-invoice:
+        <b>{{ 'ON' if auto_invoice else 'OFF' }}</b>
+        · <a class="underline" href="/logout">Logout</a>
+      </div>
+    </div>
+  </header>
 
-  <table>
-    <thead>
-      <tr>
-        <th style="width:130px">Receipt</th>
-        <th>Buyer</th>
-        <th>Total</th>
-        <th>Status</th>
-        <th>Invoice</th>
-        <th style="width:420px">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for o in orders %}
-      <tr>
-        <td>{{ o.receipt_id }}</td>
-        <td>{{ o.buyer_name or '-' }}</td>
-        <td>{{ '%.2f'|format(o.total) }} {{ o.currency }}</td>
-        <td><span class="subtle">{{ o.status }}</span></td>
-        <td>
-          {% if o.invoice.status == 'SENT' %}
-            <span class="tag sent">SENT</span>
-          {% elif o.invoice.status == 'CREATED' %}
-            <span class="tag ok">CREATED</span>
-          {% elif o.invoice.status == 'ERROR' %}
-            <span class="tag err">ERROR</span>
-          {% else %}
-            <span class="subtle">–</span>
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <!-- Flash -->
+    {% if request.query_params.get('msg') %}
+      <div class="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-2">{{ request.query_params.get('msg') }}</div>
+    {% endif %}
+    {% if request.query_params.get('err') %}
+      <div class="mb-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 px-3 py-2">{{ request.query_params.get('err') }}</div>
+    {% endif %}
+
+    <!-- Filters -->
+    <form method="get" action="/" class="grid md:grid-cols-12 gap-3 items-end mb-4">
+      <div class="md:col-span-4">
+        <label class="text-sm text-gray-600">Search (buyer / receipt)</label>
+        <input name="q" value="{{ request.query_params.get('q','') }}" placeholder="e.g. Cem, 123456789"
+               class="mt-1 w-full rounded-lg border px-3 py-2" />
+      </div>
+      <div>
+        <label class="text-sm text-gray-600">Invoice status</label>
+        <select name="istatus" class="mt-1 w-full rounded-lg border px-2 py-2">
+          {% set i = request.query_params.get('istatus','') %}
+          <option value="" {{ 'selected' if i=='' else '' }}>Any</option>
+          <option {{ 'selected' if i=='NONE' else '' }}>NONE</option>
+          <option {{ 'selected' if i=='CREATED' else '' }}>CREATED</option>
+          <option {{ 'selected' if i=='SENT' else '' }}>SENT</option>
+          <option {{ 'selected' if i=='ERROR' else '' }}>ERROR</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-sm text-gray-600">Order status</label>
+        <select name="ostatus" class="mt-1 w-full rounded-lg border px-2 py-2">
+          {% set o = request.query_params.get('ostatus','') %}
+          <option value="" {{ 'selected' if o=='' else '' }}>Any</option>
+          <option {{ 'selected' if o=='PAID' else '' }}>PAID</option>
+          <option {{ 'selected' if o=='OPEN' else '' }}>OPEN</option>
+          <option {{ 'selected' if o=='CANCELED' else '' }}>CANCELED</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-sm text-gray-600">Sort</label>
+        <select name="sort" class="mt-1 w-full rounded-lg border px-2 py-2">
+          {% set s = request.query_params.get('sort','updated_desc') %}
+          <option value="updated_desc" {{ 'selected' if s=='updated_desc' else '' }}>Newest</option>
+          <option value="updated_asc"  {{ 'selected' if s=='updated_asc'  else '' }}>Oldest</option>
+          <option value="total_desc"   {{ 'selected' if s=='total_desc'   else '' }}>Amount ↓</option>
+          <option value="total_asc"    {{ 'selected' if s=='total_asc'    else '' }}>Amount ↑</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-sm text-gray-600">Per page</label>
+        <select name="per_page" class="mt-1 w-full rounded-lg border px-2 py-2">
+          {% set p = request.query_params.get('per_page','20') %}
+          {% for n in [10,20,50,100] %}
+            <option value="{{n}}" {{ 'selected' if p==str(n) else '' }}>{{n}}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="md:col-span-2">
+        <button class="w-full rounded-lg bg-black text-white px-3 py-2 hover:bg-gray-800">Apply</button>
+      </div>
+    </form>
+
+    <!-- Bulk actions -->
+    <div id="bulkbar" class="hidden mb-2 rounded-lg border bg-white px-3 py-2 flex items-center justify-between">
+      <div class="text-sm"><span id="selCount" class="font-semibold">0</span> selected</div>
+      <div class="flex gap-2">
+        <form id="bulkCreate" action="/invoice/bulk/create" method="post">
+          <input type="hidden" name="ids" id="bulkCreateIds" />
+          <button class="rounded border px-3 py-1.5 hover:bg-gray-50">Create Invoice</button>
+        </form>
+        <form id="bulkSend" action="/invoice/bulk/send" method="post">
+          <input type="hidden" name="ids" id="bulkSendIds" />
+          <button class="rounded border px-3 py-1.5 hover:bg-gray-50">Sign / Send</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="overflow-auto rounded-lg border bg-white">
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-50 text-gray-700">
+          <tr>
+            <th class="p-3 w-10"><input id="checkAll" type="checkbox" class="h-4 w-4"></th>
+            <th class="p-3">Receipt</th>
+            <th class="p-3">Buyer</th>
+            <th class="p-3 text-right">Total</th>
+            <th class="p-3">Order</th>
+            <th class="p-3">Invoice</th>
+            <th class="p-3 w-[460px]">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for o in page_orders %}
+          <tr class="border-t">
+            <td class="p-3 align-middle">
+              <input type="checkbox" class="rowChk h-4 w-4" value="{{ o.receipt_id }}">
+            </td>
+            <td class="p-3 font-mono text-[13px]">{{ o.receipt_id }}</td>
+            <td class="p-3">{{ o.buyer_name or '-' }}</td>
+            <td class="p-3 text-right">{{ '%.2f'|format(o.total) }} {{ o.currency }}</td>
+            <td class="p-3">
+              <span class="text-gray-600">{{ o.status }}</span><br>
+              <span class="text-xs text-gray-400">{{ o.updated_epoch }}</span>
+            </td>
+            <td class="p-3">
+              {% set inv = o.invoice %}
+              {% if inv.status == 'SENT' %}
+                <span class="status-chip chip-sent">SENT</span>
+              {% elif inv.status == 'CREATED' %}
+                <span class="status-chip chip-created">CREATED</span>
+              {% elif inv.status == 'ERROR' %}
+                <span class="status-chip chip-error">ERROR</span>
+              {% else %}
+                <span class="status-chip chip-none">NONE</span>
+              {% endif %}
+              {% if inv.invoice_number %}
+                <div class="text-xs text-gray-500">#{{ inv.invoice_number }}</div>
+              {% endif %}
+              {% if inv.ettn %}
+                <div class="text-xs text-gray-400">ETTN: {{ inv.ettn }}</div>
+              {% endif %}
+              {% if inv.status == 'ERROR' and inv.error %}
+                <div class="text-xs text-rose-600 mt-1">Error: {{ inv.error }}</div>
+              {% endif %}
+            </td>
+            <td class="p-3">
+              <div class="flex flex-wrap gap-2">
+                {% if inv.status in ['NONE','ERROR'] %}
+                <form action="/invoice/create/{{ o.receipt_id }}" method="post">
+                  <button class="rounded-lg bg-black text-white px-3 py-1.5 hover:bg-gray-800">Create</button>
+                </form>
+                {% endif %}
+                {% if inv.status in ['CREATED','ERROR'] and inv.ettn %}
+                <form action="/invoice/send/{{ o.receipt_id }}" method="post">
+                  <button class="rounded-lg border px-3 py-1.5 hover:bg-gray-50">Sign / Send</button>
+                </form>
+                {% endif %}
+                {% if inv.ettn %}
+                  <a class="rounded-lg border px-3 py-1.5 hover:bg-gray-50" href="/invoice/view/{{ o.receipt_id }}" target="_blank">View</a>
+                  <a class="rounded-lg border px-3 py-1.5 hover:bg-gray-50" href="/invoice/pdf/{{ o.receipt_id }}">Download PDF</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if page_orders|length == 0 %}
+            <tr><td colspan="7" class="p-6 text-center text-gray-500">No orders match your filters.</td></tr>
           {% endif %}
-          {% if o.invoice.invoice_number %}
-            <div class="subtle">#{{ o.invoice.invoice_number }}</div>
-          {% endif %}
-          {% if o.invoice.ettn %}
-            <div class="subtle">ETTN: {{ o.invoice.ettn }}</div>
-          {% endif %}
-        </td>
-        <td class="stack">
-          {% if o.invoice.status in ['NONE','ERROR'] %}
-            <form action="/invoice/create/{{ o.receipt_id }}" method="post"><button class="btn" type="submit">Create Invoice</button></form>
-          {% endif %}
-          {% if o.invoice.status in ['CREATED','ERROR'] and o.invoice.ettn %}
-            <form action="/invoice/send/{{ o.receipt_id }}" method="post"><button class="btn" type="submit">Sign / Send</button></form>
-          {% endif %}
-          {% if o.invoice.ettn %}
-            <a class="btn outline" href="/invoice/view/{{ o.receipt_id }}" target="_blank">View</a>
-            <a class="btn outline" href="/invoice/pdf/{{ o.receipt_id }}">Download PDF</a>
-          {% endif %}
-          {% if o.invoice.status == 'ERROR' and o.invoice.error %}
-            <span class="subtle">Error: {{ o.invoice.error }}</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="mt-4 flex items-center justify-between text-sm">
+      <div>Showing
+        <b>{{ start_index+1 if total>0 else 0 }}</b>–<b>{{ min(end_index, total) }}</b> of <b>{{ total }}</b>
+      </div>
+      <div class="flex gap-2">
+        {% if page > 1 %}
+          <a class="rounded border px-3 py-1.5 hover:bg-gray-50"
+             href="?{{ query_no_page }}&page={{ page-1 }}">Previous</a>
+        {% else %}
+          <span class="rounded border px-3 py-1.5 text-gray-400">Previous</span>
+        {% endif %}
+        {% if end_index < total %}
+          <a class="rounded border px-3 py-1.5 hover:bg-gray-50"
+             href="?{{ query_no_page }}&page={{ page+1 }}">Next</a>
+        {% else %}
+          <span class="rounded border px-3 py-1.5 text-gray-400">Next</span>
+        {% endif %}
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // selection + bulk actions
+    const checkAll = document.getElementById('checkAll');
+    const rowChks = () => Array.from(document.querySelectorAll('.rowChk'));
+    const bulkbar  = document.getElementById('bulkbar');
+    const selCount = document.getElementById('selCount');
+    const createIds = document.getElementById('bulkCreateIds');
+    const sendIds   = document.getElementById('bulkSendIds');
+
+    function updateBulk() {
+      const sel = rowChks().filter(c => c.checked).map(c => c.value);
+      selCount.textContent = sel.length;
+      bulkbar.classList.toggle('hidden', sel.length === 0);
+      createIds.value = sel.join(',');
+      sendIds.value = sel.join(',');
+    }
+    checkAll?.addEventListener('change', e => {
+      rowChks().forEach(c => c.checked = e.target.checked);
+      updateBulk();
+    });
+    document.addEventListener('change', e => {
+      if (e.target.classList.contains('rowChk')) updateBulk();
+    });
+  </script>
 </body>
 </html>
