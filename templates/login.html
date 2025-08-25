@@ -17,6 +17,7 @@
     <h3>Login</h3>
     <label>Password</label>
     <input type="password" name="password" placeholder="Enter admin password" required>
+    <input type="hidden" name="next" value="{{ next or '' }}">
     <button type="submit">Sign in</button>
     {% if error %}
       <div class="err">{{ error }}</div>
