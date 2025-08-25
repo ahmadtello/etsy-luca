@@ -382,6 +382,38 @@ def db_recent_invoices_map() -> Dict[str,Dict[str,Any]]:
         keys = ["receipt_id","ettn","invoice_number","url","status","error"]
         return { r[0]: dict(zip(keys, r)) for r in rows }
 
+# ---- Filtering & pagination helpers ----
+def _attach_invoices(orders: List[Dict[str,Any]], inv_map: Dict[str,Dict[str,Any]]):
+    for o in orders:
+        inv = inv_map.get(o["receipt_id"])
+        o["invoice"] = inv or {"status":"NONE","ettn":None,"invoice_number":None,"url":None,"error":None}
+    return orders
+
+def _filter_orders(orders: List[Dict[str,Any]], q: str, istatus: str, ostatus: str):
+    q = (q or "").strip().lower()
+    out = []
+    for o in orders:
+        ok = True
+        if q:
+            ok = (q in (o.get("buyer_name") or "").lower()) or (q in str(o.get("receipt_id")))
+        if ok and istatus:
+            ok = (o["invoice"]["status"] == istatus.upper())
+        if ok and ostatus:
+            ok = (o.get("status","").upper() == ostatus.upper())
+        if ok:
+            out.append(o)
+    return out
+
+def _sort_orders(orders: List[Dict[str,Any]], sort_key: str):
+    if sort_key == "updated_asc":
+        return sorted(orders, key=lambda x: x.get("updated_epoch",0))
+    if sort_key == "total_desc":
+        return sorted(orders, key=lambda x: x.get("total",0.0), reverse=True)
+    if sort_key == "total_asc":
+        return sorted(orders, key=lambda x: x.get("total",0.0))
+    # default newest first
+    return sorted(orders, key=lambda x: x.get("updated_epoch",0), reverse=True)
+
 # ------------------ Sync core ------------------
 def sync_orders_and_maybe_invoice() -> Tuple[int,int,int]:
     """Returns: (orders_synced, invoices_created, errors)"""
@@ -479,17 +511,49 @@ def logout(request: Request):
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     require_auth(request)
+
+    # Query params
+    q        = request.query_params.get("q", "") or ""
+    istatus  = request.query_params.get("istatus", "") or ""
+    ostatus  = request.query_params.get("ostatus", "") or ""
+    sort     = request.query_params.get("sort", "updated_desc")
+    page     = int(request.query_params.get("page", "1") or "1")
+    per_page = int(request.query_params.get("per_page", "20") or "20")
+    page = max(1, page); per_page = max(1, min(per_page, 200))
+
     with DB_LOCK:
-        orders = db_recent_orders(1000)
+        orders  = db_recent_orders(5000)   # wide window, fine for SMB volumes
         inv_map = db_recent_invoices_map()
         last_sync = db_get_setting("last_sync_epoch", "0")
         st = settings_all()
-    for o in orders:
-        inv = inv_map.get(o["receipt_id"])
-        o["invoice"] = inv or {"status":"NONE","ettn":None,"invoice_number":None,"url":None,"error":None}
-    return templates.TemplateResponse("index.html",
-        {"request": request, "orders": orders, "last_sync": last_sync,
-         "poll": st.get("poll_minutes"), "auto_invoice": (st.get("auto_invoice","false")=='true') })
+
+    _attach_invoices(orders, inv_map)
+    filtered = _filter_orders(orders, q, istatus, ostatus)
+    ordered  = _sort_orders(filtered, sort)
+
+    total = len(ordered)
+    start = (page - 1) * per_page
+    end   = start + per_page
+    page_orders = ordered[start:end]
+
+    # Build a querystring without 'page' for pager links
+    qp = request.query_params.multi_items()
+    qp_no_page = "&".join([f"{k}={v}" for (k,v) in qp if k != "page"])
+
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "orders": orders,  # not used in template, kept for completeness
+        "page_orders": page_orders,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "start_index": start,
+        "end_index": end,
+        "query_no_page": qp_no_page,
+        "last_sync": last_sync,
+        "poll": st.get("poll_minutes"),
+        "auto_invoice": (st.get("auto_invoice","false") == "true"),
+    })
 
 @app.post("/sync-now")
 def sync_now(request: Request):
@@ -540,6 +604,56 @@ def view_invoice(request: Request, receipt_id: str):
     if url and url != inv.get("url"):
         db_upsert_invoice(receipt_id, url=url)
     return RedirectResponse(url, status_code=302)
+
+from fastapi import Form
+
+@app.post("/invoice/bulk/create")
+def bulk_create_invoices(request: Request, ids: str = Form("")):
+    require_auth(request)
+    st = settings_all()
+    access = etsy_refresh_access_token(st)
+    token  = luca_login(st)
+
+    ids_list = [x.strip() for x in (ids or "").split(",") if x.strip()]
+    created = 0; errs = 0
+    for rid in ids_list:
+        try:
+            order = db_get_order(rid)
+            if not order: 
+                errs += 1; continue
+            txs = etsy_transactions(st, access, rid)
+            payload = build_luca_payload(st, order["raw_json"], txs)
+            saved = luca_save_archive(st, token, payload)
+            ettn  = saved.get("Ettn") or saved.get("ETTN") or ""
+            invno = saved.get("InvoiceNumber") or ""
+            db_upsert_invoice(rid, status="CREATED", ettn=ettn, invoice_number=invno, url=None, error=None)
+            created += 1
+        except Exception as e:
+            errs += 1
+            db_upsert_invoice(rid, status="ERROR", error=str(e))
+    return RedirectResponse(f"/?msg=Created+{created}+invoice(s)&err={errs}+error(s)", status_code=303)
+
+@app.post("/invoice/bulk/send")
+def bulk_send_invoices(request: Request, ids: str = Form("")):
+    require_auth(request)
+    st = settings_all()
+    token  = luca_login(st)
+
+    ids_list = [x.strip() for x in (ids or "").split(",") if x.strip()]
+    sent = 0; errs = 0
+    for rid in ids_list:
+        try:
+            inv = db_get_invoice(rid)
+            if not inv or not inv.get("ettn"):
+                errs += 1; continue
+            _ = luca_send_archive(st, token, inv["ettn"])
+            url = luca_get_external_url(st, token, inv["ettn"])
+            db_upsert_invoice(rid, status="SENT", url=url)
+            sent += 1
+        except Exception as e:
+            errs += 1
+            db_upsert_invoice(rid, status="ERROR", error=str(e))
+    return RedirectResponse(f"/?msg=Sent+{sent}+invoice(s)&err={errs}+error(s)", status_code=303)
 
 @app.get("/invoice/pdf/{receipt_id}")
 def pdf_invoice(request: Request, receipt_id: str):
