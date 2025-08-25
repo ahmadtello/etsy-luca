@@ -6,7 +6,6 @@ from urllib.parse import quote
 
 import requests
 from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from apscheduler.schedulers.background import BackgroundScheduler
