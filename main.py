@@ -29,7 +29,6 @@ DEFAULT_CURRENCY          = os.getenv("CURRENCY_FALLBACK", "TRY")
 app = FastAPI(title="Etsy → Luca e-Arşiv")
 app.add_middleware(SessionMiddleware, secret_key=APP_SECRET)
 templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ------------------ Redirect 401s to /login ------------------
 @app.exception_handler(StarletteHTTPException)
