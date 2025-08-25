@@ -1,27 +1,68 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Login · Sleepy but still Pretty</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <title>Etsy → Luca · Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; display:flex; align-items:center; justify-content:center; height:100vh; background:#f7f7f7; }
-    .card { background:#fff; padding:24px; border-radius:12px; box-shadow:0 2px 20px rgba(0,0,0,.06); width:320px; }
-    input { width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; margin-top:8px; }
-    button { margin-top:12px; width:100%; background:#111; color:#fff; padding:10px 12px; border:none; border-radius:8px; cursor:pointer; }
-    .err { color:#b00020; font-size:14px; margin-top:8px; }
+    .card { border-radius:1.25rem; background:#fff; border:1px solid #e5e7eb; }
+    .input { width:100%; border:1px solid #e5e7eb; border-radius:.75rem; padding:.625rem .875rem }
   </style>
 </head>
-<body>
-  <form class="card" action="/login" method="post">
-    <h3>Login</h3>
-    <label>Password</label>
-    <input type="password" name="password" placeholder="Enter admin password" required>
-    <input type="hidden" name="next" value="{{ next or '' }}">
-    <button type="submit">Sign in</button>
-    {% if error %}
-      <div class="err">{{ error }}</div>
-    {% endif %}
-  </form>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+
+  <div class="min-h-screen grid place-items-center px-4">
+    <div class="w-full max-w-md">
+      <!-- Brand / Logo -->
+      <div class="flex flex-col items-center mb-6">
+        <!-- If you add static/logo.png (or .svg), it will show. Otherwise a fallback badge appears. -->
+        <img id="brandLogo" src="/static/logo.png" alt="Logo" class="h-12 w-auto mb-2"
+             onerror="this.style.display='none';document.getElementById('logoFallback').style.display='grid';">
+        <div id="logoFallback" class="hidden h-12 w-12 rounded-xl bg-black text-white grid place-items-center font-semibold">
+          EL
+        </div>
+        <div class="mt-2 text-xl font-semibold">Etsy → Luca e-Arşiv</div>
+        <div class="text-sm text-gray-600">Sign in to continue</div>
+      </div>
+
+      <!-- Error banner -->
+      {% if error %}
+        <div class="mb-4 card border-rose-200 bg-rose-50 text-rose-800 px-4 py-3 text-sm">{{ error }}</div>
+      {% endif %}
+
+      <!-- Login card -->
+      <div class="card p-5">
+        <form action="/login" method="post" class="space-y-3">
+          <input type="hidden" name="next" value="{{ next or '' }}">
+
+          <label class="text-sm text-gray-600">Admin password</label>
+          <div class="flex gap-2">
+            <input class="input flex-1" type="password" id="pwd" name="password" placeholder="••••••••" required autofocus>
+            <button type="button" class="rounded-lg border px-3 hover:bg-gray-50" onclick="togglePwd()">Show</button>
+          </div>
+
+          <button class="w-full rounded-xl bg-black text-white py-2.5 hover:bg-gray-800 mt-2">Sign in</button>
+        </form>
+
+        <div class="mt-4 text-xs text-gray-500">
+          Tip: you can change the password in Portainer (env var <code>ADMIN_PASSWORD</code>).
+        </div>
+      </div>
+
+      <!-- Footer links -->
+      <div class="mt-6 flex items-center justify-between text-sm">
+        <a href="/" class="text-gray-500 hover:underline">Back to dashboard</a>
+        <a href="/settings" class="text-gray-500 hover:underline">Settings</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function togglePwd(){
+      const el = document.getElementById('pwd');
+      el.type = el.type === 'password' ? 'text' : 'password';
+    }
+  </script>
 </body>
 </html>
