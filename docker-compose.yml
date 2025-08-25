@@ -2,10 +2,16 @@ version: "3.8"
 
 services:
   etsy-luca:
-    # Use a prebuilt image name after building in Portainer
-    image: etsy-luca:latest
-    # Or build from repo directly in Portainer (Stacks → Repository)
-    # build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: etsy-luca:latest   # optional tag for the built image
+    volumes:
+      - etsy_luca_data:/data
+    ports:
+      - "8080:8000"
+    restart: unless-stopped
+    
     environment:
       # App auth
       APP_SECRET: ${APP_SECRET}
