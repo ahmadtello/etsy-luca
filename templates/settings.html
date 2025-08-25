@@ -4,18 +4,17 @@
   <meta charset="utf-8" />
   <title>Etsy → Luca e-Arşiv · Settings</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .sidebar-link{display:flex;align-items:center;gap:.75rem;padding:.625rem .75rem;border-radius:.75rem;color:#374151}
     .sidebar-link:hover{background:#f3f4f6}
     .sidebar-link.active{background:#111827;color:#fff}
     .tw-sticky { position: sticky; top: 0; background: white; z-index: 10; }
-    .hint { font-size:.75rem; color:#6b7280 }
     .card { border-radius:1rem; background:#fff; border:1px solid #e5e7eb; }
     .input { width:100%; border:1px solid #e5e7eb; border-radius:.75rem; padding:.5rem .75rem }
     .label { font-size:.85rem; color:#6b7280 }
     .section-title { font-size:.9rem; font-weight:600; color:#111827 }
+    .hint { font-size:.75rem; color:#6b7280 }
     .toggle { position:relative; width:3rem; height:1.6rem; background:#e5e7eb; border-radius:9999px; transition:.15s; }
     .toggle:has(input:checked) { background:#111827; }
     .toggle span { position:absolute; top:.15rem; left:.2rem; width:1.3rem; height:1.3rem; background:#fff; border-radius:9999px; transition:.15s; }
@@ -23,7 +22,6 @@
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
-
   <div class="min-h-screen grid grid-cols-12">
     <!-- Sidebar -->
     <aside class="col-span-12 md:col-span-2 lg:col-span-2 xl:col-span-2 bg-white border-r">
@@ -101,15 +99,15 @@
           </div>
         </div>
 
-        <!-- Settings form -->
+        <!-- MAIN FORM (no nested forms inside) -->
         <form action="/settings" method="post" class="grid md:grid-cols-12 gap-4">
           <!-- Etsy -->
           <div class="md:col-span-12 section-title">Etsy</div>
           <div class="md:col-span-6 card p-4 space-y-3">
             <div>
               <label class="label">Client ID (App Key)</label>
-              <input class="input" name="etsy_client_id" value="{{ st.get('etsy_client_id','') }}" placeholder="e.g. your_etsy_app_key" autocomplete="off">
-              <div class="hint mt-1">From Etsy Developers → Your App → Keystring.</div>
+              <input class="input" name="etsy_client_id" value="{{ st.get('etsy_client_id','') }}" placeholder="your_etsy_app_key" autocomplete="off">
+              <div class="hint mt-1">Etsy Developers → Your App → Keystring.</div>
             </div>
             <div>
               <label class="label">Refresh Token</label>
@@ -117,14 +115,10 @@
                 <input class="input flex-1" type="password" id="etsy_refresh_token" name="etsy_refresh_token" value="{{ st.get('etsy_refresh_token','') }}" placeholder="Paste refresh token">
                 <button type="button" class="px-3 rounded-lg border" onclick="toggle('etsy_refresh_token')">Show</button>
               </div>
-              <div class="hint mt-1">Used to fetch short-lived access tokens.</div>
             </div>
             <div>
               <label class="label">Shop ID</label>
-              <input class="input" name="etsy_shop_id" value="{{ st.get('etsy_shop_id','') }}" placeholder="Your numeric shop id">
-            </div>
-            <div class="flex items-center gap-2 pt-2">
-              <form action="/settings/test/etsy" method="post" class="contents"></form>
+              <input class="input" name="etsy_shop_id" value="{{ st.get('etsy_shop_id','') }}" placeholder="Numeric shop id">
             </div>
           </div>
 
@@ -133,12 +127,12 @@
           <div class="md:col-span-6 card p-4 space-y-3">
             <div>
               <label class="label">Identity (TCKN/VKN/User)</label>
-              <input class="input" name="luca_identity" value="{{ st.get('luca_identity','') }}" placeholder="e.g. 12345678901">
+              <input class="input" name="luca_identity" value="{{ st.get('luca_identity','') }}" placeholder="12345678901">
             </div>
             <div>
               <label class="label">Password</label>
               <div class="flex gap-2">
-                <input class="input flex-1" type="password" id="luca_password" name="luca_password" value="{{ st.get('luca_password','') }}" placeholder="Your Luca password">
+                <input class="input flex-1" type="password" id="luca_password" name="luca_password" value="{{ st.get('luca_password','') }}" placeholder="Luca password">
                 <button type="button" class="px-3 rounded-lg border" onclick="toggle('luca_password')">Show</button>
               </div>
             </div>
@@ -184,26 +178,26 @@
             </div>
           </div>
 
-          <!-- Actions -->
+          <!-- Save -->
           <div class="md:col-span-12 flex flex-wrap gap-2 pt-2">
             <button class="rounded-xl bg-black text-white px-5 py-2 hover:bg-gray-800">Save settings</button>
-
-            <form action="/settings/test/etsy" method="post">
-              <button class="rounded-xl border px-4 py-2 hover:bg-gray-50">Test Etsy</button>
-            </form>
-
-            <form action="/settings/test/luca" method="post">
-              <button class="rounded-xl border px-4 py-2 hover:bg-gray-50">Test Luca</button>
-            </form>
-
             <a href="/" class="rounded-xl border px-4 py-2 hover:bg-gray-50">Cancel</a>
           </div>
         </form>
 
-        <!-- Security note -->
+        <!-- Separate small forms for tests (avoid nesting) -->
+        <div class="md:col-span-12 flex flex-wrap gap-2 pt-4">
+          <form action="/settings/test/etsy" method="post">
+            <button class="rounded-xl border px-4 py-2 hover:bg-gray-50">Test Etsy</button>
+          </form>
+          <form action="/settings/test/luca" method="post">
+            <button class="rounded-xl border px-4 py-2 hover:bg-gray-50">Test Luca</button>
+          </form>
+        </div>
+
         <div class="mt-6 hint">
-          Tip: keep <b>ADMIN_PASSWORD</b> and <b>APP_SECRET</b> in Portainer env vars (not in Git). Your settings persist in the
-          SQLite volume <code>etsy_luca_data</code>.
+          Tip: keep <b>ADMIN_PASSWORD</b> and <b>APP_SECRET</b> in Portainer env vars (not in Git). Settings persist in
+          the volume <code>etsy_luca_data</code>.
         </div>
       </main>
     </section>
