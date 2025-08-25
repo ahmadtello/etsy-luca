@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Etsy → Luca e-Arşiv Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; }
+    table { width:100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px 6px; font-size: 14px; vertical-align: middle; }
+    th { text-align: left; background:#fafafa; }
+    .tag { padding: 2px 8px; border-radius: 10px; font-size: 12px; display: inline-block; }
+    .ok { background:#e6ffed; color:#0a8a3c; }
+    .err { background:#ffecec; color:#b00020; }
+    .sent { background:#e8f0ff; color:#174ea6; }
+    .btn { background:#111; color:#fff; padding:6px 10px; border-radius:8px; text-decoration:none; border:none; cursor:pointer;}
+    .btn.outline { background:#fff; color:#111; border:1px solid #ddd; }
+    .stack { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .subtle { color:#666; }
+    .top { display:flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    code { background:#f5f5f5; padding: 2px 6px; border-radius: 6px; }
+    .right { margin-left:auto; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <h2>Etsy → Luca e-Arşiv</h2>
+    <form action="/sync-now" method="post"><button class="btn" type="submit">Sync now</button></form>
+    <a class="btn outline" href="/settings">Settings</a>
+    <span class="subtle right">Polling <b>{{ poll }}</b> min · last cursor: <code>{{ last_sync }}</code> · Auto-invoice: <b>{{ 'ON' if auto_invoice else 'OFF' }}</b> · <a class="subtle" href="/logout">Logout</a></span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:130px">Receipt</th>
+        <th>Buyer</th>
+        <th>Total</th>
+        <th>Status</th>
+        <th>Invoice</th>
+        <th style="width:420px">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td>{{ o.receipt_id }}</td>
+        <td>{{ o.buyer_name or '-' }}</td>
+        <td>{{ '%.2f'|format(o.total) }} {{ o.currency }}</td>
+        <td><span class="subtle">{{ o.status }}</span></td>
+        <td>
+          {% if o.invoice.status == 'SENT' %}
+            <span class="tag sent">SENT</span>
+          {% elif o.invoice.status == 'CREATED' %}
+            <span class="tag ok">CREATED</span>
+          {% elif o.invoice.status == 'ERROR' %}
+            <span class="tag err">ERROR</span>
+          {% else %}
+            <span class="subtle">–</span>
+          {% endif %}
+          {% if o.invoice.invoice_number %}
+            <div class="subtle">#{{ o.invoice.invoice_number }}</div>
+          {% endif %}
+          {% if o.invoice.ettn %}
+            <div class="subtle">ETTN: {{ o.invoice.ettn }}</div>
+          {% endif %}
+        </td>
+        <td class="stack">
+          {% if o.invoice.status in ['NONE','ERROR'] %}
+            <form action="/invoice/create/{{ o.receipt_id }}" method="post"><button class="btn" type="submit">Create Invoice</button></form>
+          {% endif %}
+          {% if o.invoice.status in ['CREATED','ERROR'] and o.invoice.ettn %}
+            <form action="/invoice/send/{{ o.receipt_id }}" method="post"><button class="btn" type="submit">Sign / Send</button></form>
+          {% endif %}
+          {% if o.invoice.ettn %}
+            <a class="btn outline" href="/invoice/view/{{ o.receipt_id }}" target="_blank">View</a>
+            <a class="btn outline" href="/invoice/pdf/{{ o.receipt_id }}">Download PDF</a>
+          {% endif %}
+          {% if o.invoice.status == 'ERROR' and o.invoice.error %}
+            <span class="subtle">Error: {{ o.invoice.error }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Settings · Etsy → Luca e-Arşiv</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; }
+    h2 { margin: 0 0 12px; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .card { background:#fff; border:1px solid #eee; border-radius:12px; padding:16px; }
+    label { display:block; font-size:13px; color:#555; margin:8px 0 4px; }
+    input { width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; }
+    .btn { background:#111; color:#fff; padding:10px 12px; border:none; border-radius:8px; cursor:pointer; }
+    .btn.secondary { background:#fff; color:#111; border:1px solid #ddd; }
+    .stack { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+    .msg { margin:10px 0; color:#0a8a3c; }
+    .err { margin:10px 0; color:#b00020; }
+    a.link { text-decoration:none; color:#174ea6; }
+    .topbar { display:flex; gap:12px; align-items:center; margin-bottom:16px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="link" href="/">← Dashboard</a>
+    <h2>Settings</h2>
+    {% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
+    {% if err %}<div class="err">{{ err }}</div>{% endif %}
+    <a class="link" href="/logout">Logout</a>
+  </div>
+
+  <form action="/settings" method="post">
+    <div class="row">
+      <div class="card">
+        <h3>Etsy</h3>
+        <label>Client ID (App Key)</label>
+        <input name="etsy_client_id" value="{{ st.etsy_client_id }}">
+        <label>Refresh Token</label>
+        <input name="etsy_refresh_token" value="{{ st.etsy_refresh_token }}">
+        <label>Shop ID (numeric)</label>
+        <input name="etsy_shop_id" value="{{ st.etsy_shop_id }}">
+        <div class="stack">
+          <button formaction="/settings/test/etsy" formmethod="post" class="btn secondary">Test Etsy</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Luca (TÜRMOB e-Belge)</h3>
+        <label>Identity (TCKN/VKN/Username)</label>
+        <input name="luca_identity" value="{{ st.luca_identity }}">
+        <label>Password</label>
+        <input name="luca_password" type="password" value="{{ st.luca_password }}">
+        <label>Company ID</label>
+        <input name="luca_company_id" value="{{ st.luca_company_id }}">
+        <label>Base URL</label>
+        <input name="luca_base" value="{{ st.luca_base }}">
+        <div class="stack">
+          <button formaction="/settings/test/luca" formmethod="post" class="btn secondary">Test Luca</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:24px">
+      <div class="card">
+        <h3>Behavior</h3>
+        <label>Poll Interval (minutes)</label>
+        <input name="poll_minutes" value="{{ st.poll_minutes }}">
+        <label>Orders Lookback (days)</label>
+        <input name="lookback_days" value="{{ st.lookback_days }}">
+        <label>Default KDV Rate (%)</label>
+        <input name="default_kdv_rate" value="{{ st.default_kdv_rate }}">
+        <label>Currency Fallback</label>
+        <input name="currency_fallback" value="{{ st.currency_fallback }}">
+        <label><input type="checkbox" name="auto_invoice" {% if st.auto_invoice=='true' %}checked{% endif %}> Auto-create & send invoices</label>
+      </div>
+      <div class="card" style="display:flex; align-items:flex-end; justify-content:flex-start">
+        <div class="stack">
+          <button class="btn" type="submit">Save Settings</button>
+          <a class="btn secondary" href="/">Back to Dashboard</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</body>
+</html>
