@@ -5,32 +5,27 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: etsy-luca:latest        # optional tag name for the built image
     environment:
-      # App auth
       APP_SECRET: ${APP_SECRET}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       TZ: ${TZ:-Europe/Istanbul}
-      # Behavior
       POLL_INTERVAL_MINUTES: ${POLL_INTERVAL_MINUTES:-5}
       ORDERS_LOOKBACK_DAYS: ${ORDERS_LOOKBACK_DAYS:-60}
       DEFAULT_KDV_RATE: ${DEFAULT_KDV_RATE:-0}
       CURRENCY_FALLBACK: ${CURRENCY_FALLBACK:-TRY}
-      # Etsy
       ETSY_CLIENT_ID: ${ETSY_CLIENT_ID}
       ETSY_REFRESH_TOKEN: ${ETSY_REFRESH_TOKEN}
       ETSY_SHOP_ID: ${ETSY_SHOP_ID}
-      # Luca
       LUCA_IDENTITY: ${LUCA_IDENTITY}
       LUCA_PASSWORD: ${LUCA_PASSWORD}
       LUCA_COMPANY_ID: ${LUCA_COMPANY_ID}
       LUCA_BASE: ${LUCA_BASE:-https://einvoiceapiturmob.luca.com.tr}
-      # DB file path (inside container)
       DB_PATH: /data/app.sqlite3
     volumes:
       - etsy_luca_data:/data
-    ports:
-      - "8080:8000"
+    networks:
+      - default
+      - npm_default
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
@@ -40,3 +35,8 @@ services:
 
 volumes:
   etsy_luca_data:
+
+networks:
+  npm_default:
+    external: true
+    name: npm_default
