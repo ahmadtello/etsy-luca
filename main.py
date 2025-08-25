@@ -1,6 +1,7 @@
 import os, time, json, sqlite3, threading
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
+from urllib.parse import quote
 
 import requests
 from fastapi import FastAPI, Request, Form, HTTPException
@@ -9,6 +10,8 @@ from fastapi.templating import Jinja2Templates
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exception_handlers import http_exception_handler as default_http_exception_handler
 
 # ------------------ Load .env (optional) ------------------
 load_dotenv()
@@ -25,6 +28,18 @@ DEFAULT_CURRENCY          = os.getenv("CURRENCY_FALLBACK", "TRY")
 app = FastAPI(title="Etsy → Luca e-Arşiv")
 app.add_middleware(SessionMiddleware, secret_key=APP_SECRET)
 templates = Jinja2Templates(directory="templates")
+
+# ------------------ Redirect 401s to /login ------------------
+@app.exception_handler(StarletteHTTPException)
+async def auth_redirect_on_401(request: Request, exc: StarletteHTTPException):
+    # If not authorized, send to login and preserve where the user wanted to go
+    if exc.status_code == 401:
+        next_url = request.url.path
+        if request.url.query:
+            next_url += f"?{request.url.query}"
+        return RedirectResponse(url=f"/login?next={quote(next_url)}", status_code=303)
+    # other HTTP errors: default handling
+    return await default_http_exception_handler(request, exc)
 
 # ------------------ DB ------------------
 DB_PATH = os.getenv("DB_PATH", "app.sqlite3")
@@ -493,14 +508,15 @@ def healthz():
 # ---- Auth ----
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    nxt = request.query_params.get("next")
+    return templates.TemplateResponse("login.html", {"request": request, "error": None, "next": nxt})
 
 @app.post("/login")
-def login_post(request: Request, password: str = Form(...)):
+def login_post(request: Request, password: str = Form(...), next: Optional[str] = Form(None)):
     if password == ADMIN_PASSWORD:
         request.session["auth"] = True
-        return RedirectResponse("/", status_code=303)
-    return templates.TemplateResponse("login.html", {"request": request, "error": "Wrong password"})
+        return RedirectResponse(next or "/", status_code=303)
+    return templates.TemplateResponse("login.html", {"request": request, "error": "Wrong password", "next": next})
 
 @app.get("/logout")
 def logout(request: Request):
@@ -605,8 +621,6 @@ def view_invoice(request: Request, receipt_id: str):
         db_upsert_invoice(receipt_id, url=url)
     return RedirectResponse(url, status_code=302)
 
-from fastapi import Form
-
 @app.post("/invoice/bulk/create")
 def bulk_create_invoices(request: Request, ids: str = Form("")):
     require_auth(request)
@@ -619,7 +633,7 @@ def bulk_create_invoices(request: Request, ids: str = Form("")):
     for rid in ids_list:
         try:
             order = db_get_order(rid)
-            if not order: 
+            if not order:
                 errs += 1; continue
             txs = etsy_transactions(st, access, rid)
             payload = build_luca_payload(st, order["raw_json"], txs)
